@@ -1,6 +1,3 @@
-//
-// Created by alexa on 22/04/2025.
-//
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -8,7 +5,7 @@
 
 int main() {
     std::ifstream infile("US.txt");
-    std::ofstream outfile("US_trimmed.txt"); // New filtered file
+    std::ofstream outfile("US_trimmed.txt"); // Output file
 
     if (!infile.is_open() || !outfile.is_open()) {
         std::cerr << "Failed to open input or output file.\n";
@@ -26,18 +23,34 @@ int main() {
             tokens.push_back(token);
         }
 
-        // Feature class is in column 7 (index 6)
-        if (tokens.size() >= 7 && (tokens[6] == "P" || tokens[6] == "L")) {
-            if ((stof(tokens[4]) > 24.5169 && stof(tokens[4]) < 49.3333) && (stof(tokens[5]) < -66.96 && stof(tokens[5]) > -124.7167)) {
-                outfile << tokens[1] + "\t" + tokens[4] + "\t" + tokens[5] + "\t" + tokens[6] << "\n";
-            }
+        // Ensure enough fields
+        if (tokens.size() >= 17 && (tokens[6] == "P" || tokens[6] == "L")) {
+            try {
+                float lat = std::stof(tokens[4]);
+                float lon = std::stof(tokens[5]);
 
+                if (lat > 24.5169 && lat < 49.3333 && lon < -66.96 && lon > -124.7167) {
+                    outfile << tokens[1] << "\t";  // name
+
+                    if (tokens[6] == "P") {
+                        outfile << tokens[16] << "\t"; // population only for P
+                    } else {
+                        outfile << "-" << "\t"; // placeholder for L
+                    }
+
+                    outfile << tokens[4] << "\t"     // latitude
+                            << tokens[5] << "\t"     // longitude
+                            << tokens[6] << "\n";    // feature class
+                }
+            } catch (...) {
+                continue; // skip invalid lat/lon rows
+            }
         }
     }
 
     infile.close();
     outfile.close();
 
-    std::cout << "Filtered file written to US_trimmed.txt\n";
+    std::cout << "Filtered Ps and Ls into US_trimmed.txt\n";
     return 0;
 }
