@@ -72,13 +72,14 @@ std::vector<int> dijkstra(int start, int end,
     std::vector<double> dist(graph.size(), std::numeric_limits<double>::infinity());
     std::vector<int> prev(graph.size(), -1);
     using P = std::pair<double, int>;
-    std::priority_queue<P, std::vector<P>, std::greater<P>> pq;
+    std::priority_queue<P, std::vector<P>, std::greater<>> pq;
 
     dist[start] = 0;
     pq.emplace(0, start);
 
     while (!pq.empty()) {
-        auto [d, u] = pq.top(); pq.pop();
+        auto [d, u] = pq.top();
+        pq.pop();
         if (u == end) break;
 
         for (const auto& [v, weight] : graph.at(u)) {
