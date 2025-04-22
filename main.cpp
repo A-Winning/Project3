@@ -154,6 +154,7 @@ int main() {
     }
 
     std::cout << "\nShortest route:\n";
+
     for (int idx : path) {
         std::cout << " → " << locations[idx].name << " (" << locations[idx].latitude << ", " << locations[idx].longitude << ")\n";
     }
