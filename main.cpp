@@ -14,9 +14,9 @@ struct Location {
     std::string name;
     double latitude;
     double longitude;
-
 };
 
+std::vector<Location> locations;
 
 // Haversine distance between two locations
 double haversine(const Location& a, const Location& b) {
@@ -38,7 +38,7 @@ int findNearestNode(double lat, double lon, const std::vector<Location>& locatio
     int nearest = -1;
     double minDist = 1e9;
     Location target{"", lat, lon};
-    std::cout << locations.size() << std::endl;
+
     for (int i = 0; i < locations.size(); ++i) {
         double d = haversine(target, locations[i]);
         if (d < minDist) {
@@ -49,7 +49,7 @@ int findNearestNode(double lat, double lon, const std::vector<Location>& locatio
     return nearest;
 }
 
-// Build graph by connecting cities within a threshold distance
+// Build graph by connecting nearby cities
 std::unordered_map<int, std::vector<std::pair<int, double>>> buildGraph(
     const std::vector<Location>& locations, double maxDistance = 100.0) {
 
@@ -67,21 +67,20 @@ std::unordered_map<int, std::vector<std::pair<int, double>>> buildGraph(
     return graph;
 }
 
-// Dijkstra's algorithm for shortest path
+// Dijkstra's algorithm
 std::vector<int> dijkstra(int start, int end,
     const std::unordered_map<int, std::vector<std::pair<int, double>>>& graph) {
 
-    std::vector<double> dist(graph.size(), std::numeric_limits<double>::infinity());
-    std::vector<int> prev(graph.size(), -1);
+    std::vector<double> dist(locations.size(), std::numeric_limits<double>::infinity());
+    std::vector<int> prev(locations.size(), -1);
     using P = std::pair<double, int>;
-    std::priority_queue<P, std::vector<P>, std::greater<>> pq;
+    std::priority_queue<P, std::vector<P>, std::greater<P>> pq;
 
     dist[start] = 0;
     pq.emplace(0, start);
 
     while (!pq.empty()) {
-        auto [d, u] = pq.top();
-        pq.pop();
+        auto [d, u] = pq.top(); pq.pop();
         if (u == end) break;
 
         for (const auto& [v, weight] : graph.at(u)) {
@@ -99,7 +98,49 @@ std::vector<int> dijkstra(int start, int end,
 
     std::reverse(path.begin(), path.end());
     return path;
+}
 
+// Greedy path through selected waypoints
+std::vector<int> greedyPath(int startIdx, int endIdx, const std::vector<int>& waypoints,
+                            const std::unordered_map<int, std::vector<std::pair<int, double>>>& graph) {
+    std::vector<int> path = {startIdx};
+    int current = startIdx;
+    std::vector<int> remaining = waypoints;
+
+    while (!remaining.empty()) {
+        int next = -1;
+        double bestDist = std::numeric_limits<double>::infinity();
+
+        for (int w : remaining) {
+            auto subPath = dijkstra(current, w, graph);
+            if (!subPath.empty()) {
+                double dist = 0;
+                for (size_t i = 1; i < subPath.size(); ++i)
+                    dist += haversine(locations[subPath[i - 1]], locations[subPath[i]]);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    next = w;
+                }
+            }
+        }
+
+        if (next == -1) break;
+
+        auto segment = dijkstra(current, next, graph);
+        if (segment.size() > 1) {
+            path.insert(path.end(), segment.begin() + 1, segment.end());
+        }
+
+        current = next;
+        remaining.erase(std::remove(remaining.begin(), remaining.end(), next), remaining.end());
+    }
+
+    auto lastSegment = dijkstra(current, endIdx, graph);
+    if (lastSegment.size() > 1) {
+        path.insert(path.end(), lastSegment.begin() + 1, lastSegment.end());
+    }
+
+    return path;
 }
 
 int main() {
@@ -110,33 +151,23 @@ int main() {
     }
 
     std::string line;
-    std::vector<Location> locations;
-
     while (std::getline(file, line)) {
         std::istringstream ss(line);
-        std::string word;
-        std::string name;
+        std::string word, name;
         double lat = 0.0, lon = 0.0;
         std::string featureClass;
 
-        // Read name (everything before the first number)
         while (ss >> word) {
             try {
-                lat = std::stod(word);  // will throw if not a number
-                break;                  // found the latitude
+                lat = std::stod(word);
+                break;
             } catch (...) {
                 if (!name.empty()) name += " ";
                 name += word;
             }
         }
 
-        // Now read the rest
-        if (!(ss >> lon >> featureClass)) {
-            //std::cerr << "Malformed line: " << line << "\n";
-            continue;
-        }
-
-        // Optional: only keep places of type "P" or "L"
+        if (!(ss >> lon >> featureClass)) continue;
         if (featureClass == "P" || featureClass == "L") {
             locations.push_back({name, lat, lon});
         }
@@ -146,7 +177,7 @@ int main() {
     std::cout << "Loaded " << locations.size() << " locations.\n";
 
     double startLat, startLon, endLat, endLon;
-    char comma;  // to consume the commas
+    char comma;
 
     std::cout << "Enter start latitude and longitude (e.g. 25.9, -80.3): ";
     std::cin >> startLat >> comma >> startLon;
@@ -162,25 +193,42 @@ int main() {
         return 1;
     }
 
-    std::cout << "Finding route between:\n";
-    std::cout << "Start: " << locations[startIdx].name << " (" << locations[startIdx].latitude << ", " << locations[startIdx].longitude << ")\n";
-    std::cout << "End:   " << locations[endIdx].name << " (" << locations[endIdx].latitude << ", " << locations[endIdx].longitude << ")\n";
+    int numWaypoints;
+    std::cout << "How many landmarks/cities would you like to stop at along the way? ";
+    std::cin >> numWaypoints;
 
-    auto graph = buildGraph(locations);
-    auto path = dijkstra(startIdx, endIdx, graph);
+    // Pick closest waypoints to midpoint
+    Location midpoint = {
+        "Midpoint",
+        (locations[startIdx].latitude + locations[endIdx].latitude) / 2,
+        (locations[startIdx].longitude + locations[endIdx].longitude) / 2
+    };
+
+    std::vector<std::pair<double, int>> distances;
+    for (int i = 0; i < locations.size(); ++i) {
+        if (i == startIdx || i == endIdx) continue;
+        double d = haversine(midpoint, locations[i]);
+        distances.emplace_back(d, i);
+    }
+    std::sort(distances.begin(), distances.end());
+
+    std::vector<int> waypointIndices;
+    for (int i = 0; i < numWaypoints && i < distances.size(); ++i) {
+        waypointIndices.push_back(distances[i].second);
+    }
+
+    auto graph = buildGraph(locations, 500.0); // 500km threshold
+    auto path = greedyPath(startIdx, endIdx, waypointIndices, graph);
 
     if (path.size() <= 1) {
         std::cout << "No path found between the selected locations.\n";
         return 0;
     }
 
-    std::cout << "\nShortest route:\n";
-
+    std::cout << "\nShortest route with " << numWaypoints << " stops:\n";
     for (int idx : path) {
         std::cout << " → " << locations[idx].name << " (" << locations[idx].latitude << ", " << locations[idx].longitude << ")\n";
     }
 
     return 0;
 }
-
-
