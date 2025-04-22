@@ -14,7 +14,9 @@ struct Location {
     std::string name;
     double latitude;
     double longitude;
+
 };
+
 
 // Haversine distance between two locations
 double haversine(const Location& a, const Location& b) {
@@ -108,22 +110,39 @@ int main() {
 
     std::string line;
     std::vector<Location> locations;
+
     while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string token;
-        std::vector<std::string> tokens;
+        std::istringstream ss(line);
+        std::string word;
+        std::string name;
+        double lat = 0.0, lon = 0.0;
+        std::string featureClass;
 
-        while (std::getline(ss, token, '\t')) tokens.push_back(token);
+        // Read name (everything before the first number)
+        while (ss >> word) {
+            try {
+                lat = std::stod(word);  // will throw if not a number
+                break;                  // found the latitude
+            } catch (...) {
+                if (!name.empty()) name += " ";
+                name += word;
+            }
+        }
 
-        if (tokens.size() >= 3) {
-            Location loc;
-            loc.name = tokens[0];
-            loc.latitude = std::stod(tokens[1]);
-            loc.longitude = std::stod(tokens[2]);
-            locations.push_back(loc);
+        // Now read the rest
+        if (!(ss >> lon >> featureClass)) {
+            //std::cerr << "Malformed line: " << line << "\n";
+            continue;
+        }
+
+        // Optional: only keep places of type "P" or "L"
+        if (featureClass == "P" || featureClass == "L") {
+            locations.push_back({name, lat, lon});
         }
     }
+
     file.close();
+    std::cout << "Loaded " << locations.size() << " locations.\n";
 
     double startLat, startLon, endLat, endLon;
     char comma;  // to consume the commas
