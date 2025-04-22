@@ -28,7 +28,10 @@ int main() {
 
         // Feature class is in column 7 (index 6)
         if (tokens.size() >= 7 && (tokens[6] == "P" || tokens[6] == "L")) {
-            outfile << tokens[1] + "\t" + tokens[4] + "\t" + tokens[5] + "\t" + tokens[6] << "\n";
+            if ((stof(tokens[4]) > 24.5169 && stof(tokens[4]) < 49.3333) && (stof(tokens[5]) < -66.96 && stof(tokens[5]) > -124.7167)) {
+                outfile << tokens[1] + "\t" + tokens[4] + "\t" + tokens[5] + "\t" + tokens[6] << "\n";
+            }
+
         }
     }
 
